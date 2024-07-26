@@ -13,7 +13,7 @@ const corsOptions = {
   origin: [
     "http://localhost:5173",
     "http://localhost:5174",
-    "https://mega-earning.netlify.app",
+    "https://mobile-financial-service.netlify.app",
   ],
   credentials: true,
   optionSuccessStatus: 200,
@@ -126,7 +126,11 @@ async function run() {
       if (!user) return res.status(404).send({ message: "User not found" });
       const validPin = await bcrypt.compare(pin, user.pin);
       if (!validPin) return res.status(401).send({ message: "Invalid PIN" });
-      const token = jwt.sign({ id: user._id }, secret, { expiresIn: "1h" });
+      const token = jwt.sign(
+        { id: user._id },
+        process.env.DB_USERACCESS_TOKEN_SECRET,
+        { expiresIn: "1h" }
+      );
       res.status(200).send({ message: "Login successful", token });
     });
 
@@ -267,7 +271,7 @@ async function run() {
 
     // Cash-In Request Endpoint
     app.post("/cash-in-request", verifyToken, async (req, res) => {
-      const { agentMobile, amount, agent_email,agent_mobileNumber} = req.body;
+      const { agentMobile, amount, agent_email, agent_mobileNumber } = req.body;
       const user = await db
         .collection("users")
         .findOne({ _id: new ObjectId(req.userId) });
@@ -276,8 +280,8 @@ async function run() {
         .findOne({ mobileNumber: agentMobile, role: "agent" });
       if (!agent) return res.status(404).send({ message: "Agent not found" });
       const cashInRequest = {
-        user_email:user.email,
-        user_mobileNumber:user.mobileNumber,
+        user_email: user.email,
+        user_mobileNumber: user.mobileNumber,
         agent_email,
         agent_mobileNumber,
         userId: req.userId,
@@ -300,7 +304,7 @@ async function run() {
     // Approve Cash-In Request Endpoint
     app.post("/approve-cash-in", verifyToken, async (req, res) => {
       try {
-        const { requestId,agent_email,agent_mobileNumber } = req.body;
+        const { requestId, agent_email, agent_mobileNumber } = req.body;
         const agent = await db.collection("users").findOne({
           _id: new ObjectId(req.userId),
           role: "agent",
@@ -337,7 +341,7 @@ async function run() {
             { $set: { status: "approved" } }
           );
 
-          await db.collection("cashInRequests").findOne()
+        await db.collection("cashInRequests").findOne();
         // Insert the transaction into the transactions collection
         await db.collection("transactions").insertOne({
           agent_email,
@@ -368,17 +372,21 @@ async function run() {
     });
 
     // Transaction History Endpoint
-    app.get("/user-transactions/:user_mobileNumber", verifyToken, async (req, res) => {
-      const user_mobileNumber = req.params.user_mobileNumber;
-      const query = {user_mobileNumber: user_mobileNumber};
-      const transactions = await db
-        .collection("transactions")
-        .find(query)
-        .sort({ date: -1 }) // Sort by date in descending order
-        .limit(10) // Limit to the last 10 transactions
-        .toArray();
-      res.status(200).send({ transactions });
-    });
+    app.get(
+      "/user-transactions/:user_mobileNumber",
+      verifyToken,
+      async (req, res) => {
+        const user_mobileNumber = req.params.user_mobileNumber;
+        const query = { user_mobileNumber: user_mobileNumber };
+        const transactions = await db
+          .collection("transactions")
+          .find(query)
+          .sort({ date: -1 }) // Sort by date in descending order
+          .limit(10) // Limit to the last 10 transactions
+          .toArray();
+        res.status(200).send({ transactions });
+      }
+    );
 
     // Agent Transaction Management Endpoint
     app.post("/manage-transaction", verifyToken, async (req, res) => {
